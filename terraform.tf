@@ -60,3 +60,19 @@ resource "aws_route53_record" "ssh" {
   ttl = "60"
   records = ["${element(digitalocean_droplet.web.*.ipv4_address, count.index)}"]
 }
+
+# Create floating IPs and connect to droplets
+resource "digitalocean_floating_ip" "web" {
+  count = "${var.number_of_servers}"
+  droplet_id = "${element(digitalocean_droplet.web.*.id, count.index)}"
+  region = "${element(digitalocean_droplet.web.*.region, count.index)}"
+}
+
+# Create DNS records using floating IP
+resource "aws_route53_record" "do" {
+  zone_id = "${var.dns_zone_id}"
+  name = "${var.digital_ocean_domain_name}."
+  type = "A"
+  ttl = 60
+  records = ["${digitalocean_floating_ip.web.*.ip_address}"]
+}
