@@ -76,3 +76,75 @@ resource "aws_route53_record" "do" {
   ttl = 60
   records = ["${digitalocean_floating_ip.web.*.ip_address}"]
 }
+
+# Multi provider - multi datacenter
+# Using DNS failover
+
+variable "javazone_domain_name" {
+  default = "javazone.landro.io"
+}
+
+# Create DNS records digital ocean
+resource "aws_route53_record" "javazone-do" {
+  zone_id = "${var.dns_zone_id}"
+  name = "${var.javazone_domain_name}"
+  type = "A"
+
+  weighted_routing_policy {
+    weight = "${var.number_of_servers}"
+  }
+  set_identifier = "do"
+
+  alias {
+    name = "${aws_route53_record.do.fqdn}"
+    zone_id = "${aws_route53_record.do.zone_id}"
+    evaluate_target_health = true
+  }
+
+  health_check_id = "${aws_route53_health_check.do.id}"
+
+}
+
+# Create DNS records amazon ecs
+resource "aws_route53_record" "javazone-ecs" {
+  zone_id = "${var.dns_zone_id}"
+  name = "${var.javazone_domain_name}"
+  type = "A"
+
+  weighted_routing_policy {
+    weight = "${var.asg_max}"
+  }
+  set_identifier = "ecs"
+
+  alias {
+    name = "${aws_alb.main.dns_name}"
+    zone_id = "${aws_alb.main.zone_id}"
+    evaluate_target_health = true
+  }
+
+  health_check_id = "${aws_route53_health_check.ecs.id}"
+
+}
+
+# Create health check for service running on
+# virtual machines (droplets) at Digital Ocean
+resource "aws_route53_health_check" "do" {
+  fqdn = "${var.digital_ocean_domain_name}"
+  port = 80
+  type = "HTTP"
+  resource_path = "/images/poweredby.png"
+  failure_threshold = "3"
+  request_interval = "10"
+}
+
+# Create health check for service running on elastic
+# container service (ECS) at Amazon
+resource "aws_route53_health_check" "ecs" {
+  fqdn = "${aws_alb.main.dns_name}"
+  port = 80
+  type = "HTTP"
+  resource_path = "/images/poweredby.png"
+  failure_threshold = "3"
+  request_interval = "10"
+}
+
