@@ -17,6 +17,21 @@ resource "digitalocean_droplet" "web" {
   region = "ams2"
   size = "512mb"
   ssh_keys = ["${digitalocean_ssh_key.ssh.id}"]
+
+  # Install and run Apache httpd right after
+  # provisioning droplet
+  provisioner "remote-exec" {
+    inline = [
+      "yum -y install httpd",
+      "systemctl start httpd"
+    ]
+  }
+
+  connection {
+    type = "ssh"
+    user = "root"
+    private_key = "${file("../id_rsa_clear")}"
+  }
 }
 
 # Create SSH key that can be connected to droplets
